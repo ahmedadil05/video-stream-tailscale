@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Camera Control Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #0a0e1a;
+            --bg-card: #12192e;
+            --accent: #00ff9d;
+            --accent-dim: #00aa66;
+            --text: #e4e8f0;
+            --text-dim: #7a8199;
+            --danger: #ff3366;
+            --warning: #ffaa00;
+            --grid-size: 20px;
+        }
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background: var(--bg-dark);
+            color: var(--text);
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Animated grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 157, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 157, 0.03) 1px, transparent 1px);
+            background-size: var(--grid-size) var(--grid-size);
+            animation: gridMove 20s linear infinite;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(var(--grid-size), var(--grid-size)); }
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid rgba(0, 255, 157, 0.2);
+        }
+
+        h1 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+            background: linear-gradient(135deg, var(--accent) 0%, #00ccff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: glow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { filter: drop-shadow(0 0 10px rgba(0, 255, 157, 0.3)); }
+            to { filter: drop-shadow(0 0 20px rgba(0, 255, 157, 0.6)); }
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        /* Main Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Video Panel */
+        .video-panel {
+            background: var(--bg-card);
+            border: 2px solid rgba(0, 255, 157, 0.2);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .video-header {
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(0, 255, 157, 0.1) 0%, transparent 100%);
+            border-bottom: 1px solid rgba(0, 255, 157, 0.2);
+        }
+
+        .video-header h2 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        #videoCanvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            background: #000;
+            min-height: 400px;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            background: rgba(10, 14, 26, 0.9);
+            padding: 12px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--accent);
+            font-size: 0.85rem;
+            font-family: 'JetBrains Mono', monospace;
+            backdrop-filter: blur(10px);
+        }
+
+        .video-overlay div {
+            margin: 4px 0;
+        }
+
+        .overlay-label {
+            color: var(--text-dim);
+            display: inline-block;
+            width: 80px;
+        }
+
+        .overlay-value {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 2px solid rgba(0, 255, 157, 0.2);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h3 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Buttons */
+        button {
+            width: 100%;
+            padding: 16px 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 600;
+            border: 2px solid;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        button:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg-dark);
+        }
+
+        .btn-primary:hover {
+            background: transparent;
+            color: var(--accent);
+            box-shadow: 0 0 20px rgba(0, 255, 157, 0.4);
+        }
+
+        .btn-danger {
+            background: transparent;
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .btn-danger:hover {
+            background: var(--danger);
+            color: white;
+            box-shadow: 0 0 20px rgba(255, 51, 102, 0.4);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border-color: var(--text-dim);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        /* Settings */
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(0, 255, 157, 0.1);
+        }
+
+        .setting-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .setting-label {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+        }
+
+        .setting-value {
+            font-weight: 600;
+            color: var(--accent);
+            font-size: 1.1rem;
+        }
+
+        /* Recordings List */
+        .recordings-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .recording-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(0, 255, 157, 0.05);
+            border: 1px solid rgba(0, 255, 157, 0.2);
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .recording-item:hover {
+            background: rgba(0, 255, 157, 0.1);
+            border-color: var(--accent);
+            transform: translateX(4px);
+        }
+
+        .recording-info {
+            flex: 1;
+        }
+
+        .recording-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .recording-meta {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .download-btn {
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            width: auto;
+        }
+
+        /* Console Log */
+        .console-log {
+            background: #000;
+            border: 2px solid rgba(0, 255, 157, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 4px 8px;
+            border-left: 2px solid var(--accent);
+            padding-left: 12px;
+        }
+
+        .log-timestamp {
+            color: var(--text-dim);
+            margin-right: 8px;
+        }
+
+        .log-error {
+            color: var(--danger);
+            border-left-color: var(--danger);
+        }
+
+        .log-warning {
+            color: var(--warning);
+            border-left-color: var(--warning);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 4px;
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ Pi Camera Control</h1>
+            <div class="status-badge">
+                <span class="status-dot" id="connectionStatus"></span>
+                <span id="connectionText">Connecting...</span>
+            </div>
+        </header>
+
+        <div class="main-grid">
+            <!-- Video Panel -->
+            <div class="video-panel">
+                <div class="video-header">
+                    <h2>📹 Live Stream</h2>
+                </div>
+                <canvas id="videoCanvas"></canvas>
+                <div class="video-overlay" id="videoOverlay">
+                    <div><span class="overlay-label">FPS:</span><span class="overlay-value" id="fpsDisplay">0</span></div>
+                    <div><span class="overlay-label">Latency:</span><span class="overlay-value" id="latencyDisplay">0ms</span></div>
+                    <div><span class="overlay-label">Frames:</span><span class="overlay-value" id="frameCount">0</span></div>
+                    <div><span class="overlay-label">Dropped:</span><span class="overlay-value" id="droppedFrames">0</span></div>
+                </div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <!-- Stream Controls -->
+                <div class="card">
+                    <h3>🎬 Stream Control</h3>
+                    <div class="btn-group">
+                        <button id="btnStart" class="btn-primary" onclick="startStream()">▶ Start</button>
+                        <button id="btnStop" class="btn-danger" onclick="stopStream()">⏹ Stop</button>
+                    </div>
+                </div>
+
+                <!-- Recording Controls -->
+                <div class="card">
+                    <h3>⏺ Recording</h3>
+                    <div class="btn-group">
+                        <button id="btnRecordStart" class="btn-primary" onclick="startRecording()">⏺ Record</button>
+                        <button id="btnRecordStop" class="btn-danger" onclick="stopRecording()" disabled>⏹ Stop</button>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Recording Duration</span>
+                        <span class="setting-value" id="recordingDuration">0s</span>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Frames Recorded</span>
+                        <span class="setting-value" id="framesRecorded">0</span>
+                    </div>
+                </div>
+
+                <!-- System Info -->
+                <div class="card">
+                    <h3>📊 System Info</h3>
+                    <div class="setting-row">
+                        <span class="setting-label">Camera</span>
+                        <span class="setting-value" id="cameraType">-</span>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Resolution</span>
+                        <span class="setting-value" id="resolution">-</span>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Quality</span>
+                        <span class="setting-value" id="quality">-</span>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Uptime</span>
+                        <span class="setting-value" id="uptime">0s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recordings Section -->
+        <div class="card">
+            <h3>💾 Recordings</h3>
+            <button class="btn-secondary" onclick="refreshRecordings()" style="margin-bottom: 16px;">
+                🔄 Refresh List
+            </button>
+            <div class="recordings-list" id="recordingsList">
+                <div style="text-align: center; color: var(--text-dim); padding: 40px;">
+                    No recordings yet
+                </div>
+            </div>
+        </div>
+
+        <!-- Console Log -->
+        <div class="card">
+            <h3>📟 Console Log</h3>
+            <div class="console-log" id="consoleLog">
+                <div class="log-entry">
+                    <span class="log-timestamp">[00:00:00]</span>
+                    System initialized
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Uses web bridge server
+        const BRIDGE_URL = 'http://localhost:8080';  // Web bridge server URL
+
+        // State
+        let ws = null;
+        let udpSocket = null;
+        let isStreaming = false;
+        let isRecording = false;
+        let frameCount = 0;
+        let droppedFrames = 0;
+        let lastSeq = -1;
+        let fpsQueue = [];
+        let lastFrameTime = Date.now();
+        
+        const canvas = document.getElementById('videoCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Initialize
+        window.onload = () => {
+            log('Connecting to Pi...');
+            connectToPi();
+            startStatusPolling();
+        };
+
+        // Connect to Pi for commands
+        async function connectToPi() {
+            try {
+                // Test connection with ping
+                await sendCommand('PING');
+                log('✓ Connected to Pi', 'success');
+                updateConnectionStatus(true);
+            } catch (e) {
+                log('✗ Failed to connect to Pi', 'error');
+                updateConnectionStatus(false);
+                setTimeout(connectToPi, 5000);
+            }
+        }
+
+        // Send command via web bridge
+        async function sendCommand(command) {
+            try {
+                const response = await fetch(`${BRIDGE_URL}/command`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'text/plain'},
+                    body: command
+                });
+                const data = await response.json();
+                return data.response;
+            } catch (e) {
+                console.error('Command error:', e);
+                throw e;
+            }
+        }
+
+        // Start video stream
+        async function startStream() {
+            log('Starting stream...');
+            try {
+                const response = await sendCommand('START');
+                isStreaming = true;
+                document.getElementById('btnStart').disabled = true;
+                document.getElementById('btnStop').disabled = false;
+                log('✓ Stream started: ' + response, 'success');
+            } catch (e) {
+                log('✗ Failed to start stream', 'error');
+            }
+        }
+
+        async function stopStream() {
+            log('Stopping stream...');
+            try {
+                const response = await sendCommand('STOP');
+                isStreaming = false;
+                document.getElementById('btnStart').disabled = false;
+                document.getElementById('btnStop').disabled = true;
+                log('✓ Stream stopped: ' + response);
+            } catch (e) {
+                log('✗ Failed to stop stream', 'error');
+            }
+        }
+
+        async function startRecording() {
+            log('Starting recording...');
+            try {
+                const response = await sendCommand('RECORD_START');
+                isRecording = true;
+                document.getElementById('btnRecordStart').disabled = true;
+                document.getElementById('btnRecordStop').disabled = false;
+                log('✓ Recording started: ' + response, 'success');
+            } catch (e) {
+                log('✗ Failed to start recording', 'error');
+            }
+        }
+
+        async function stopRecording() {
+            log('Stopping recording...');
+            try {
+                const response = await sendCommand('RECORD_STOP');
+                isRecording = false;
+                document.getElementById('btnRecordStart').disabled = false;
+                document.getElementById('btnRecordStop').disabled = true;
+                log('✓ Recording stopped: ' + response);
+                refreshRecordings();
+            } catch (e) {
+                log('✗ Failed to stop recording', 'error');
+            }
+        }
+
+        // Poll status from Pi via bridge
+        async function startStatusPolling() {
+            setInterval(async () => {
+                try {
+                    const response = await fetch(`${BRIDGE_URL}/status`);
+                    const stats = await response.json();
+                    updateStats(stats);
+                    updateConnectionStatus(!stats.error);
+                } catch (e) {
+                    updateConnectionStatus(false);
+                }
+            }, 1000);
+        }
+
+        function updateStats(stats) {
+            if (stats.error) return;
+            
+            isStreaming = stats.streaming;
+            isRecording = stats.recording;
+            
+            document.getElementById('cameraType').textContent = stats.camera_type || '-';
+            document.getElementById('resolution').textContent = stats.resolution ? `${stats.resolution[0]}x${stats.resolution[1]}` : '-';
+            document.getElementById('quality').textContent = stats.quality || '-';
+            document.getElementById('uptime').textContent = formatTime(stats.uptime_seconds || 0);
+            document.getElementById('recordingDuration').textContent = formatTime(stats.recording_duration || 0);
+            document.getElementById('framesRecorded').textContent = stats.frames_recorded || 0;
+            document.getElementById('frameCount').textContent = stats.frames_sent || 0;
+            
+            // Update button states
+            document.getElementById('btnStart').disabled = isStreaming;
+            document.getElementById('btnStop').disabled = !isStreaming;
+            document.getElementById('btnRecordStart').disabled = isRecording;
+            document.getElementById('btnRecordStop').disabled = !isRecording;
+        }
+
+        async function refreshRecordings() {
+            log('Refreshing recordings list...');
+            try {
+                const response = await fetch(`${BRIDGE_URL}/recordings`);
+                const recordings = await response.json();
+                
+                const recordingsList = document.getElementById('recordingsList');
+                
+                if (recordings.length === 0) {
+                    recordingsList.innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 40px;">No recordings yet</div>';
+                    return;
+                }
+
+                recordingsList.innerHTML = recordings.map(rec => `
+                    <div class="recording-item">
+                        <div class="recording-info">
+                            <div class="recording-name">${rec.filename}</div>
+                            <div class="recording-meta">${rec.size_mb} MB • ${new Date(rec.modified).toLocaleString()}</div>
+                        </div>
+                        <button class="btn-primary download-btn" onclick="downloadRecording('${rec.filename}')">
+                            ⬇ Download
+                        </button>
+                    </div>
+                `).join('');
+                
+                log(`✓ Found ${recordings.length} recordings`);
+            } catch (e) {
+                log('✗ Failed to load recordings', 'error');
+            }
+        }
+
+        async function downloadRecording(filename) {
+            log(`Downloading ${filename}...`);
+            window.open(`${BRIDGE_URL}/download/${filename}`);
+            log(`✓ Download started for ${filename}`);
+        }
+
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('connectionStatus');
+            const text = document.getElementById('connectionText');
+            
+            if (connected) {
+                dot.style.background = 'var(--accent)';
+                text.textContent = 'Connected';
+            } else {
+                dot.style.background = 'var(--danger)';
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        function log(message, type = 'info') {
+            const consoleLog = document.getElementById('consoleLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type === 'error' ? 'log-error' : type === 'warning' ? 'log-warning' : ''}`;
+            entry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span>${message}`;
+            consoleLog.appendChild(entry);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = seconds % 60;
+            if (h > 0) return `${h}h ${m}m ${s}s`;
+            if (m > 0) return `${m}m ${s}s`;
+            return `${s}s`;
+        }
+
+    </script>
+</body>
+</html>
